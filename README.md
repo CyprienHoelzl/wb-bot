@@ -40,7 +40,7 @@ python3 wb_bot.py -h
 Enroll and save credentials (locally in `.wb-bot.json`)
 
 ```bash
-python3 wb_bot.py --email "flbuetle" --save-credentials 
+python3 wb_bot.py --email "marcel.muster@gmail.com" --save-credentials 
 ```
 
 Enroll and use saved credentials
