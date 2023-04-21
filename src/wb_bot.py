@@ -16,6 +16,7 @@ import getpass
 from pathlib import Path
 import argparse
 
+
 CREDENTIALS_FILENAME = ".wb-bot.json"
 CREDENTIALS_EMAIL = "email"
 CREDENTIALS_PW = "password"
@@ -27,6 +28,85 @@ logging.basicConfig(
 )
 
 ISSUES_URL = "https://github.com/CyprienHoelzl/wb-bot/issues"
+
+
+#%% Depracation decorator
+import functools
+import inspect
+import warnings
+string_types = (type(b''), type(u''))
+
+def deprecated(reason):
+    """
+    This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used.
+    """
+
+    if isinstance(reason, string_types):
+
+        # The @deprecated is used with a 'reason'.
+        #
+        # .. code-block:: python
+        #
+        #    @deprecated("please, use another function")
+        #    def old_function(x, y):
+        #      pass
+
+        def decorator(func1):
+
+            if inspect.isclass(func1):
+                fmt1 = "Call to deprecated class {name} ({reason})."
+            else:
+                fmt1 = "Call to deprecated function {name} ({reason})."
+
+            @functools.wraps(func1)
+            def new_func1(*args, **kwargs):
+                warnings.simplefilter('always', DeprecationWarning)
+                warnings.warn(
+                    fmt1.format(name=func1.__name__, reason=reason),
+                    category=DeprecationWarning,
+                    stacklevel=2
+                )
+                warnings.simplefilter('default', DeprecationWarning)
+                return func1(*args, **kwargs)
+
+            return new_func1
+
+        return decorator
+
+    elif inspect.isclass(reason) or inspect.isfunction(reason):
+
+        # The @deprecated is used without any 'reason'.
+        #
+        # .. code-block:: python
+        #
+        #    @deprecated
+        #    def old_function(x, y):
+        #      pass
+
+        func2 = reason
+
+        if inspect.isclass(func2):
+            fmt2 = "Call to deprecated class {name}."
+        else:
+            fmt2 = "Call to deprecated function {name}."
+
+        @functools.wraps(func2)
+        def new_func2(*args, **kwargs):
+            warnings.simplefilter('always', DeprecationWarning)
+            warnings.warn(
+                fmt2.format(name=func2.__name__),
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            warnings.simplefilter('default', DeprecationWarning)
+            return func2(*args, **kwargs)
+
+        return new_func2
+
+    else:
+        raise TypeError(repr(type(reason)))
 
 #%% Function Definition
 class WbBotException(Exception):
@@ -111,18 +191,26 @@ class WbEnroller:
         self.logininfo = self.login().json()
         
     def login(self):
-        headers = {"authority": "workingbicycle.ch",
+        """
+        Login to Website
+
+        Returns
+        -------
+        response : HTTPS request response
+
+        """
+        headers = {"authority": "api.workingbicycle.ch",
         "method": "POST",
-        "path": "/api/auth/login",
+        "path": "/login",
         "scheme": "https",
-        "accept": "application/json, text/plain, */*",
+        "accept": "*/*",
         "accept-encoding": "gzip, deflate, br",
         "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
         "content-length": "61",
         "content-type": "application/json",
-        "origin": "https://www.workingbicycle.ch",
-        "referer": "https://www.workingbicycle.ch/",
-        "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
+        "origin": "https://driver.workingbicycle.ch",
+        "referer": "https://driver.workingbicycle.ch/",
+        "sec-ch-ua": """"Google Chrome";v="111", "Chromium";v="111", ";Not A Brand";v="99""" + '"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": "Windows",
         "sec-fetch-dest": "empty",
@@ -134,7 +222,7 @@ class WbEnroller:
         password = self.creds[CREDENTIALS_PW]
         query = {"email": username, 
                  "password": password}
-        response = requests.post('https://workingbicycle.ch/api/auth/login', 
+        response = requests.post('https://api.workingbicycle.ch/login', 
                                headers=headers, json=query)
         return response
     def getActiveCampaignsDashboardData(self):
@@ -146,17 +234,18 @@ class WbEnroller:
         response : HTTP response.
 
         """
-        headers = {"authority": "workingbicycle.ch",
+        headers = {"authority": "api.workingbicycle.ch",
         "method": "GET",
-        "path": "/api/driver/getActiveCampaignsDashboardData",
+        "path": "/campaigns/available?itemsPerPage=10&page=1",
         "scheme": "https",
         "accept": "application/json, text/plain, */*",
         "accept-encoding": "gzip, deflate, br",
         "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
-        "authorization": "Bearer " + self.logininfo['accessToken'],
-        "origin": "https://www.workingbicycle.ch",
-        "referer": "https://www.workingbicycle.ch/",
-        "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
+        "authorization": "Bearer " + self.logininfo['token'], # token valid 8 hours
+        "if-none-match": 'W/"0e97e7afe709c72674eaf147fc3b7e54"', # check if this needs to be updated
+        "origin": "https://driver.workingbicycle.ch",
+        "referer": "https://driver.workingbicycle.ch/",
+        "sec-ch-ua": """"Google Chrome";v="111", "Chromium";v="111", ";Not A Brand";v="99""" + '"',
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": "Windows",
         "sec-fetch-dest": "empty",
@@ -164,10 +253,159 @@ class WbEnroller:
         "sec-fetch-site": "same-site",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
         }
-        response = requests.get('https://workingbicycle.ch/api/driver/getActiveCampaignsDashboardData', 
+        response = requests.get('https://api.workingbicycle.ch/campaigns/available?itemsPerPage=10&page=1', 
                                headers=headers)
         return response
+    
     def registerfornotifications(self,driverid,campaignid):
+        """
+        Register for notifications
+
+        Parameters
+        ----------
+        driverid : id of driver.
+        campaignid : id of campaign.
+
+        Returns
+        -------
+        response : HTTP response.
+
+        """
+        headers = {"authority": "api.workingbicycle.ch",
+                    "method": "POST",
+                    "path": "/campaign_waiting_list_registrations",
+                    "scheme": "https",
+                    "accept": "application/json, text/plain, */*",
+                    "accept-encoding": "gzip, deflate, br",
+                    "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
+                    "authorization": "Bearer " + self.logininfo['token'],
+                    "content-length": "2",
+                    "content-type": "application/json",
+                    "origin": "https://www.driver.workingbicycle.ch",
+                    "referer": "https://www.driver.workingbicycle.ch/",
+                    "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": "Windows",
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-site",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
+                    }    
+        query = {"driver": driverid, 
+                 "campaign":campaignid}       
+        
+        
+        response = requests.post('https://api.workingbicycle.ch/campaign_waiting_list_registrations', 
+                   headers=headers, json=query)
+        return response
+    
+    def registerforcampaign(self,campaign,driverid):
+        """
+        Register for campaign
+
+        Parameters
+        ----------
+        campaign : json of campaign.
+        driverid : id of driver.
+
+        Returns
+        -------
+        response : HTTP response.
+
+        """
+        headers = {"authority": "api.workingbicycle.ch",
+                    "method": "POST",
+                    "path": "/campaign_registrations",
+                    "scheme": "https",
+                    "accept": "application/json, text/plain, */*",
+                    "accept-encoding": "gzip, deflate, br",
+                    "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
+                    "authorization": "Bearer " + self.logininfo['token'],
+                    "content-length": "139",
+                    "content-type": "application/json",
+                    "origin": "https://www.driver.workingbicycle.ch",
+                    "referer": "https://www.driver.workingbicycle.ch/",
+                    "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": "Windows",
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-site",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
+                    }          
+        query = {"driver": driverid, 
+                 "campaign":campaign['id']
+                 }   
+        response = requests.post('https://api.workingbicycle.ch/campaign_registrations', 
+                               headers=headers,  json=query)
+        return response
+    
+    def signup_for_campaign_or_for_notification(self,campaigns):
+        """
+        Signup or subscribe to notifications
+
+        Parameters
+        ----------
+        campaigns : fetched campaigns.
+
+        Raises
+        ------
+        WbBotException
+            Stops in case of error.
+
+        Returns
+        -------
+        None.
+
+        """
+        # campaignNotificationSubscribers = campaigns['driver']['campaignNotificationSubscribers']
+        new_campaigns = campaigns['hydra:member']
+        registeredCampaigns = campaigns['driver']['registeredCampaigns']
+        driverid = campaigns['driver']['id']
+        # Windows of existing campaigns
+        rg = []
+        # for rc in registeredCampaigns: 
+        #     campaignStartDate = datetime.datetime.fromisoformat(rc['campaign']['campaignStartDate'])
+        #     campaignEndDate = datetime.datetime.fromisoformat(rc['campaign']['campaignEndDate'])
+        #     rg.append((campaignStartDate,campaignEndDate))
+        for campaign in new_campaigns:
+            campaignid = campaign['id']
+            boolAvailableSpot = campaign['fullyBooked']==False
+            boolNoWaitingList = campaign['isOnWaitingList']==False
+            # boolNotOnTheStreet = campaign['campaignAlreadyOnTheStreet']==False
+            # boolNotRegisteredOnCampaign = campaign['isDriverRegisteredOnCampaign']==False
+            campaignStartDate = datetime.datetime.fromisoformat(campaign['actualStartDate'])
+            campaignEndDate = datetime.datetime.fromisoformat(campaign['actualEndDate'])
+            # only sign up if not overlapping
+            doesnotoverlap_existingcampaign = True
+            if len(rg)>0:
+                for s,e in rg:
+                    if ((campaignStartDate>=e) | (campaignEndDate<=s))==False:
+                        doesnotoverlap_existingcampaign =False
+            # sign up for campaign or activate notification for empty slots
+            response = None
+            if boolAvailableSpot & doesnotoverlap_existingcampaign:#& boolNotOnTheStreet & boolNotRegisteredOnCampaign:
+                response = self.registerforcampaign(campaign,driverid)
+                if response.status_code == 200:
+                    logging.info('Registered for driving: {}'.format(campaign['id']))
+                    rg.append((datetime.datetime.fromisoformat(campaign['actualStartDate']),
+                               datetime.datetime.fromisoformat(campaign['actualEndDate'])))
+                else:
+                    logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)['message']))
+                    raise WbBotException('Error registering: {}'.format(e))
+            else:
+                #Sign up for notification if not already signed up
+                if boolNoWaitingList:            
+                    response = self.registerfornotifications(driverid,campaignid)
+                    if response.status_code == 200:
+                        logging.info('Registered for notifications: {}'.format(campaign['id']))   
+                    else:
+                        logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)['message']))
+                        raise WbBotException('Error registering: {}'.format(e))
+
+    
+    @deprecated("Legacy code to fix for new API")
+    def registerfornotifications_old(self,driverid,campaignid):
         """
         Register for notifications
 
@@ -188,7 +426,7 @@ class WbEnroller:
                     "accept": "application/json, text/plain, */*",
                     "accept-encoding": "gzip, deflate, br",
                     "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
-                    "authorization": "Bearer " + self.logininfo['accessToken'],
+                    "authorization": "Bearer " + self.logininfo['token'],
                     "content-length": "2",
                     "content-type": "application/json",
                     "origin": "https://www.workingbicycle.ch",
@@ -208,7 +446,9 @@ class WbEnroller:
         response = requests.post('https://workingbicycle.ch/api/driver/notifyDriver?driverId={}&campaignId={}'.format(driverid,campaignid), 
                    headers=headers, json=query)
         return response
-    def registerforcampaign(self,campaign,driverid):
+    
+    @deprecated("Legacy code to delete once new API fully tested")
+    def registerforcampaign_old(self,campaign,driverid):
         """
         Register for campaign
 
@@ -229,7 +469,7 @@ class WbEnroller:
                     "accept": "application/json, text/plain, */*",
                     "accept-encoding": "gzip, deflate, br",
                     "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
-                    "authorization": "Bearer " + self.logininfo['accessToken'],
+                    "authorization": "Bearer " + self.logininfo['token'],
                     "content-length": "139",
                     "content-type": "application/json",
                     "origin": "https://www.workingbicycle.ch",
@@ -251,7 +491,8 @@ class WbEnroller:
         response = requests.post('https://workingbicycle.ch/api/driver/registerForCampaign', 
                                headers=headers,  json=query)
         return response
-    def signup_for_campaign_or_for_notification(self,campaigns):
+    @deprecated("Legacy code to fix for new API")
+    def signup_for_campaign_or_for_notification_old(self,campaigns):
         """
         Signup or subscribe to notifications
 
