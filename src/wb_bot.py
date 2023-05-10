@@ -279,7 +279,7 @@ class WbEnroller:
                     "accept-encoding": "gzip, deflate, br",
                     "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
                     "authorization": "Bearer " + self.logininfo['token'],
-                    "content-length": "2",
+                    "content-length": "119",
                     "content-type": "application/json",
                     "origin": "https://www.driver.workingbicycle.ch",
                     "referer": "https://www.driver.workingbicycle.ch/",
@@ -299,13 +299,13 @@ class WbEnroller:
                    headers=headers, json=query)
         return response
     
-    def registerforcampaign(self,campaign,driverid):
+    def registerforcampaign(self,campaignid,driverid):
         """
         Register for campaign
 
         Parameters
         ----------
-        campaign : json of campaign.
+        campaignid : id of campaign.
         driverid : id of driver.
 
         Returns
@@ -334,7 +334,7 @@ class WbEnroller:
                     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
                     }          
         query = {"driver": driverid, 
-                 "campaign":campaign['id']
+                 "campaign":campaignid
                  }   
         response = requests.post('https://api.workingbicycle.ch/campaign_registrations', 
                                headers=headers,  json=query)
@@ -360,8 +360,8 @@ class WbEnroller:
         """
         # campaignNotificationSubscribers = campaigns['driver']['campaignNotificationSubscribers']
         new_campaigns = campaigns['hydra:member']
-        registeredCampaigns = campaigns['driver']['registeredCampaigns']
-        driverid = campaigns['driver']['id']
+        # registeredCampaigns = campaigns['driver']['registeredCampaigns']
+        driverid = self.logininfo['user']['driver']['@id']
         # Windows of existing campaigns
         rg = []
         # for rc in registeredCampaigns: 
@@ -369,7 +369,7 @@ class WbEnroller:
         #     campaignEndDate = datetime.datetime.fromisoformat(rc['campaign']['campaignEndDate'])
         #     rg.append((campaignStartDate,campaignEndDate))
         for campaign in new_campaigns:
-            campaignid = campaign['id']
+            campaignid = campaign['@id']
             boolAvailableSpot = campaign['fullyBooked']==False
             boolNoWaitingList = campaign['isOnWaitingList']==False
             # boolNotOnTheStreet = campaign['campaignAlreadyOnTheStreet']==False
@@ -385,9 +385,9 @@ class WbEnroller:
             # sign up for campaign or activate notification for empty slots
             response = None
             if boolAvailableSpot & doesnotoverlap_existingcampaign:#& boolNotOnTheStreet & boolNotRegisteredOnCampaign:
-                response = self.registerforcampaign(campaign,driverid)
-                if response.status_code == 200:
-                    logging.info('Registered for driving: {}'.format(campaign['id']))
+                response = self.registerforcampaign(campaignid,driverid)
+                if response.status_code == 201:
+                    logging.info('Registered for driving: {}'.format(campaignid))
                     rg.append((datetime.datetime.fromisoformat(campaign['actualStartDate']),
                                datetime.datetime.fromisoformat(campaign['actualEndDate'])))
                 else:
@@ -395,160 +395,12 @@ class WbEnroller:
                     raise WbBotException('Error registering: {}'.format(e))
             else:
                 #Sign up for notification if not already signed up
-                if boolNoWaitingList:            
+                if boolNoWaitingList:           
                     response = self.registerfornotifications(driverid,campaignid)
-                    if response.status_code == 200:
-                        logging.info('Registered for notifications: {}'.format(campaign['id']))   
+                    if response.status_code == 201:
+                        logging.info('Registered for notifications: {}'.format(campaignid))   
                     else:
-                        logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)['message']))
-                        raise WbBotException('Error registering: {}'.format(e))
-
-    
-    @deprecated("Legacy code to fix for new API")
-    def registerfornotifications_old(self,driverid,campaignid):
-        """
-        Register for notifications
-
-        Parameters
-        ----------
-        driverid : id of driver.
-        campaignid : id of campaign.
-
-        Returns
-        -------
-        response : HTTP response.
-
-        """
-        headers = {"authority": "workingbicycle.ch",
-                    "method": "POST",
-                    "path": "/api/driver/notifyDriver?driverId={}&campaignId={}".format(driverid,campaignid),
-                    "scheme": "https",
-                    "accept": "application/json, text/plain, */*",
-                    "accept-encoding": "gzip, deflate, br",
-                    "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
-                    "authorization": "Bearer " + self.logininfo['token'],
-                    "content-length": "2",
-                    "content-type": "application/json",
-                    "origin": "https://www.workingbicycle.ch",
-                    "referer": "https://www.workingbicycle.ch/",
-                    "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
-                    "sec-ch-ua-mobile": "?0",
-                    "sec-ch-ua-platform": "Windows",
-                    "sec-fetch-dest": "empty",
-                    "sec-fetch-mode": "cors",
-                    "sec-fetch-site": "same-site",
-                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
-                    }    
-        query = {"driverId": driverid, 
-                 "campaignId":campaignid}       
-        
-        
-        response = requests.post('https://workingbicycle.ch/api/driver/notifyDriver?driverId={}&campaignId={}'.format(driverid,campaignid), 
-                   headers=headers, json=query)
-        return response
-    
-    @deprecated("Legacy code to delete once new API fully tested")
-    def registerforcampaign_old(self,campaign,driverid):
-        """
-        Register for campaign
-
-        Parameters
-        ----------
-        campaign : json of campaign.
-        driverid : id of driver.
-
-        Returns
-        -------
-        response : HTTP response.
-
-        """
-        headers = {"authority": "workingbicycle.ch",
-                    "method": "POST",
-                    "path": "/api/driver/registerForCampaign",
-                    "scheme": "https",
-                    "accept": "application/json, text/plain, */*",
-                    "accept-encoding": "gzip, deflate, br",
-                    "accept-language": "en-US,en;q=0.9,fr;q=0.8,de;q=0.7,sv;q=0.6,it;q=0.5,ja;q=0.4",
-                    "authorization": "Bearer " + self.logininfo['token'],
-                    "content-length": "139",
-                    "content-type": "application/json",
-                    "origin": "https://www.workingbicycle.ch",
-                    "referer": "https://www.workingbicycle.ch/",
-                    "sec-ch-ua": """"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99""" + '"',
-                    "sec-ch-ua-mobile": "?0",
-                    "sec-ch-ua-platform": "Windows",
-                    "sec-fetch-dest": "empty",
-                    "sec-fetch-mode": "cors",
-                    "sec-fetch-site": "same-site",
-                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
-                    }        
-        query = {"campaignId": campaign['id'],
-                 "montageTimeslotId":None,
-                                "campaignZoneId": None,
-                                "firstTimeDrivePriceAccepted": False,
-                                "alreadyHaveFixedAdboxAccepted":True
-                            }   
-        response = requests.post('https://workingbicycle.ch/api/driver/registerForCampaign', 
-                               headers=headers,  json=query)
-        return response
-    @deprecated("Legacy code to fix for new API")
-    def signup_for_campaign_or_for_notification_old(self,campaigns):
-        """
-        Signup or subscribe to notifications
-
-        Parameters
-        ----------
-        campaigns : fetched campaigns.
-
-        Raises
-        ------
-        WbBotException
-            Stops in case of error.
-
-        Returns
-        -------
-        None.
-
-        """
-        # campaignNotificationSubscribers = campaigns['driver']['campaignNotificationSubscribers']
-        registeredCampaigns = campaigns['driver']['registeredCampaigns']
-        driverid = campaigns['driver']['id']
-        # Windows of existing campaigns
-        rg = []
-        for rc in registeredCampaigns: 
-            campaignStartDate = datetime.datetime.fromisoformat(rc['campaign']['campaignStartDate'])
-            campaignEndDate = datetime.datetime.fromisoformat(rc['campaign']['campaignEndDate'])
-            rg.append((campaignStartDate,campaignEndDate))
-        for campaign in campaigns['activeCampaigns']:
-            campaignid = campaign['id']
-            boolAvailableSpot = campaign['availableSpots']>0
-            boolNoNotification = (campaign['isNotificationActive']==False)
-            boolNotOnTheStreet = campaign['campaignAlreadyOnTheStreet']==False
-            boolNotRegisteredOnCampaign = campaign['isDriverRegisteredOnCampaign']==False
-            campaignStartDate = datetime.datetime.fromisoformat(campaign['campaignStartDate'])
-            campaignEndDate = datetime.datetime.fromisoformat(campaign['campaignEndDate'])
-            # only sign up if not overlapping
-            doesnotoverlap_existingcampaign = True
-            for s,e in rg:
-                if ((campaignStartDate>=e) | (campaignEndDate<=s))==False:
-                    doesnotoverlap_existingcampaign =False
-            # sign up for campaign or activate notification for empty slots
-            response = None
-            if boolAvailableSpot & doesnotoverlap_existingcampaign & boolNotOnTheStreet & boolNotRegisteredOnCampaign:
-                response = self.registerforcampaign(campaign,driverid)
-                if response.status_code == 200:
-                    logging.info('Registered for driving: {}'.format(campaign['id']))
-                else:
-                    logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)['message']))
-                    raise WbBotException('Error registering: {}'.format(e))
-            else:
-                #Sign up for notification if not already signed up
-                if boolNotRegisteredOnCampaign & boolNoNotification:            
-                    response = self.registerfornotifications(driverid,campaignid)
-                    if response.status_code == 200:
-                        logging.info('Registered for notifications: {}'.format(campaign['id']))   
-                    else:
-                        logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)['message']))
+                        logging.error('Error: {}, \t{}'.format(response.status_code,json.JSONDecoder().decode(response.text)))
                         raise WbBotException('Error registering: {}'.format(e))
 
 def signup_wb(s,creds,timewindow): 
